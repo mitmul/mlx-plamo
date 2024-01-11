@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "mlx-plamo"
+version = "0.1.0"
+description = "Sample code of PLaMo running on mac using MLX"
+authors = ["Shunta Saito <shunta.saito@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "mlx_plamo"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+sentencepiece = "^0.1.99"
+torch = {url = "https://download.pytorch.org/whl/nightly/cpu/torch-2.3.0.dev20240110-cp311-none-macosx_11_0_arm64.whl"}
+transformers = "4.32.0"
+mlx = {git = "https://github.com/ml-explore/mlx.git"}
+
+
+[tool.poetry.group.dev.dependencies]
+ipython = "^8.20.0"
+ipdb = "^0.13.13"
+isort = "^5.13.2"
+black = "^23.12.1"
+flake8 = "^7.0.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
