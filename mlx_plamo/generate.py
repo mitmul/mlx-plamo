@@ -87,7 +87,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--prompt",
         help="The message to be processed by the model",
-        default="In the beginning the Universe was created.",
+        default="",
     )
     parser.add_argument(
         "--max-tokens",
@@ -122,7 +122,8 @@ if __name__ == "__main__":
     else:
         prompt = args.prompt
 
-    answer = generate(model, tokenizer, prompt, args.max_tokens, args.write_every, args.temp)
+    if len(args.prompt) > 0:
+        answer = generate(model, tokenizer, prompt, args.max_tokens, args.write_every, args.temp)
 
     while True:
         new_input = input("Input more text to continue generation:")
