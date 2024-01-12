@@ -10,9 +10,9 @@ packages = [{include = "mlx_plamo"}]
 [tool.poetry.dependencies]
 python = "^3.11"
 sentencepiece = "^0.1.99"
-torch = {url = "https://download.pytorch.org/whl/nightly/cpu/torch-2.3.0.dev20240110-cp311-none-macosx_11_0_arm64.whl"}
 transformers = "4.32.0"
-mlx = {git = "https://github.com/ml-explore/mlx.git"}
+mlx = "^0.0.9"
+torch = "^2.1.2"
 
 
 [tool.poetry.group.dev.dependencies]
