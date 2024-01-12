@@ -2,6 +2,8 @@
 
 An example of generating text with [PLaMo-13b](https://tech.preferred.jp/en/blog/llm-plamo/) using MLX.
 
+This example consumes about 27.5GB memory while text generation if the original bfloat16 weights are used as is.
+
 ### Setup
 
 If your Python environment doesn't have poetry, install it first:
@@ -45,3 +47,5 @@ You will see the output like this:
 [INFO] Prompt processing: 1.215 s
 [INFO] Full generation: 4.098 s
 ```
+
+The elapsed time shown above is measured on M1 Max MacBook Pro (with 10 CPUs, 32 GPUs, and 64GB memory model).
