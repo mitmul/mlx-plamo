@@ -38,7 +38,7 @@ poetry run python -m mlx_plamo.generate --instruct --prompt "コンピュータ�
 You will see the output like this:
 
 ```
-[INFO] Loading model from plamo-13b-instruct-nc-bf16/weights.*.npz.
+[INFO] Loading model from mlx_model/weights.*.npz.
 ------
 コンピュータ科学(コンピュータサイエンスまたはCSとも呼ばれる)は、コンピューターの動作原理と、コンピューターソフトウェアやハードウェアの設計と開発を扱う分野です。
 ------
