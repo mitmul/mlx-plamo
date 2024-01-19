@@ -1,12 +1,8 @@
-import glob
-from pathlib import Path
-from typing import Any, List, NamedTuple, Optional, Tuple, Union
+from typing import Any, List, NamedTuple, Optional, Tuple
 
 import mlx.core as mx
 import mlx.nn as nn
 import numpy as np
-from mlx.utils import tree_unflatten
-from sentencepiece import SentencePieceProcessor
 from transformers import PretrainedConfig
 
 
@@ -28,7 +24,7 @@ class DecoderOutput(NamedTuple):
     next_decoder_cache: Optional[Tuple[mx.array, ...]]
 
 
-class PlamoConfig(PretrainedConfig):  # type: ignore
+class ModelArgs(PretrainedConfig):  # type: ignore
     model_type: str = "plamo"
 
     def __init__(
@@ -38,7 +34,6 @@ class PlamoConfig(PretrainedConfig):  # type: ignore
         intermediate_size: int = 13312,
         num_hidden_layers: int = 32,
         num_attention_heads: int = 32,
-        num_key_value_heads: Optional[int] = None,
         max_position_embeddings: int = 2048,
         initializer_range: float = 0.02,
         rms_norm_eps: float = 1e-6,
@@ -57,16 +52,9 @@ class PlamoConfig(PretrainedConfig):  # type: ignore
         self.intermediate_size = intermediate_size
         self.num_hidden_layers = num_hidden_layers
         self.num_attention_heads = num_attention_heads
-
-        # for backward compatibility
-        if num_key_value_heads is None:
-            num_key_value_heads = num_attention_heads
-
-        self.num_key_value_heads = num_key_value_heads
         self.initializer_range = initializer_range
         self.rms_norm_eps = rms_norm_eps
         self.use_cache = use_cache
-
         self.n_shared_head = n_shared_head
 
         super().__init__(
@@ -79,7 +67,7 @@ class PlamoConfig(PretrainedConfig):  # type: ignore
         )
 
 
-class RotaryEmbedding(nn.Module):
+class RotaryEmbedding:
     def __init__(self, dim: int, max_position_embeddings: int = 2048, base: int = 10000) -> None:
         super().__init__()
 
@@ -87,8 +75,8 @@ class RotaryEmbedding(nn.Module):
         self.max_position_embeddings = max_position_embeddings
         self.base = base
         self.inv_freq = 1.0 / mx.power(self.base, mx.arange(0, self.dim, 2, dtype=mx.float32) / self.dim)
-
-        # Build here to make `torch.jit.trace` work.
+        self.cos_cached = mx.zeros((1, 1, max_position_embeddings, dim))
+        self.sin_cached = mx.zeros((1, 1, max_position_embeddings, dim))
         self._set_cos_sin_cache(max_position_embeddings)
 
     def _set_cos_sin_cache(self, seq_len: int) -> None:
@@ -129,22 +117,22 @@ def _rotary_pos_emb(x: mx.array, cos: mx.array, sin: mx.array, position_ids: mx.
     return x_embed
 
 
-class RMSNorm(nn.Module):
+class RMSNorm(nn.Module):  # type: ignore
     def __init__(self, dims: int, eps: float = 1e-5):
         super().__init__()
         self.weight = mx.ones((dims,))
         self.variance_epsilon = eps
 
-    def _norm(self, x):
+    def _norm(self, x: mx.array) -> mx.array:
         return x * mx.rsqrt(x.square().mean(-1, keepdims=True) + self.variance_epsilon)
 
-    def __call__(self, x):
+    def __call__(self, x: mx.array) -> mx.array:
         output = self._norm(x.astype(mx.float32)).astype(x.dtype)
         return self.weight * output
 
 
-class Attention(nn.Module):
-    def __init__(self, config: PlamoConfig) -> None:
+class Attention(nn.Module):  # type: ignore
+    def __init__(self, config: ModelArgs) -> None:
         super().__init__()
         self.config = config
         self.hidden_size = config.hidden_size
@@ -212,8 +200,8 @@ class Attention(nn.Module):
         return self.o_proj(output), (key_states, value_states)
 
 
-class MLP(nn.Module):
-    def __init__(self, config: PlamoConfig) -> None:
+class MLP(nn.Module):  # type: ignore
+    def __init__(self, config: ModelArgs) -> None:
         super().__init__()
         self.config = config
         self.hidden_size = config.hidden_size
@@ -227,8 +215,8 @@ class MLP(nn.Module):
         return self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))  # type: ignore
 
 
-class PlamoDecoderLayer(nn.Module):
-    def __init__(self, config: PlamoConfig) -> None:
+class PlamoDecoderLayer(nn.Module):  # type: ignore
+    def __init__(self, config: ModelArgs) -> None:
         super().__init__()
         self.config = config
         self.hidden_size = config.hidden_size
@@ -266,14 +254,14 @@ class PlamoDecoderLayer(nn.Module):
         return hidden_states, cache  # type: ignore
 
 
-class PlamoDecoder(nn.Module):
-    def __init__(self, config: PlamoConfig) -> None:
+class PlamoDecoder(nn.Module):  # type: ignore
+    def __init__(self, config: ModelArgs) -> None:
         super().__init__()
         self.layers = [PlamoDecoderLayer(config) for _ in range(config.num_hidden_layers)]
 
 
-class PlamoPreTrainedModel(nn.Module):  # type: ignore
-    config_class = PlamoConfig
+class PlamoModel(nn.Module):  # type: ignore
+    config_class = ModelArgs
     _no_split_modules: List[str]
     base_model_prefix = "model"
     supports_gradient_checkpointing = True
@@ -281,160 +269,63 @@ class PlamoPreTrainedModel(nn.Module):  # type: ignore
     _skip_keys_device_placement = "past_key_values"
     _keys_to_ignore_on_load_unexpected = [r"decoder\.version"]
 
-    def __init__(self, config: PlamoConfig):
+    def __init__(self, config: ModelArgs):
         super().__init__()
         self.config = config
-
-    def _init_weights(self, module: nn.Module) -> None:
-        std = self.config.initializer_range
-        if isinstance(module, nn.Linear):
-            module.weight.data.normal_(mean=0.0, std=std)
-            if module.bias is not None:
-                module.bias.data.zero_()
-        elif isinstance(module, nn.Embedding):
-            module.weight.data.normal_(mean=0.0, std=std)
-            if module.padding_idx is not None:
-                module.weight.data[module.padding_idx].zero_()
-
-    def _set_gradient_checkpointing(self, module: nn.Module, value: bool = False) -> None:
-        module.gradient_checkpointing = value  # type: ignore
-
-
-class PlamoModel(PlamoPreTrainedModel):
-    def __init__(self, config: PlamoConfig):
-        super().__init__(config)
         self.padding_idx = config.pad_token_id
         self.vocab_size = config.vocab_size
 
         self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size)
         self.layers = PlamoDecoder(config)  # type: ignore
         self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-
         self.gradient_checkpointing = False
-        # Initialize weights and apply final processing
-        # self.post_init()
+
+    def __call__(
+        self, inputs: mx.array, cache: Optional[List[Tuple[mx.array, mx.array]]] = None
+    ) -> Tuple[mx.array, Optional[List[Tuple[mx.array, mx.array]]]]:
+        h = self.embed_tokens(inputs)
+
+        mask = None
+        if h.shape[1] > 1:
+            mask = nn.MultiHeadAttention.create_additive_causal_mask(h.shape[1])
+            mask = mask.astype(self.embed_tokens.weight.dtype)
+
+        if cache is None:
+            past_key_values_length = 0
+            cache = [(None, None) for _ in range(len(self.layers.layers))]
+        else:
+            if cache[0] != (None, None):
+                past_key_values_length = cache[0][0].shape[2]
+        position_ids = _create_position_ids(h.shape[1], past_key_values_length)
+
+        for e, layer in enumerate(self.layers.layers):
+            h, c = layer(h, mask, position_ids, cache[e])
+            if cache[e] != (None, None):
+                cache[e] = c
+            else:
+                cache.append(c)
+
+        return self.norm(h), cache
 
 
-class PlamoForCausalLM(PlamoPreTrainedModel):
+def _create_position_ids(seq_length: int, past_key_values_length: int = 0) -> mx.array:
+    # create position_ids on the fly for batch generation
+    position_ids = mx.arange(past_key_values_length, seq_length + past_key_values_length, dtype=mx.int64)
+    position_ids = position_ids[None, ...].reshape(-1, seq_length)
+
+    return position_ids
+
+
+class Model(nn.Module):  # type: ignore
     def __init__(self, config: PretrainedConfig) -> None:
-        super().__init__(config)
+        super().__init__()
         self.model = PlamoModel(config)
-
         self.lm_head: nn.Module = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
-
-        # Initialize weights and apply final processing
-        # self.post_init()
-
-    def _create_position_ids(self, x: mx.array, cache: Optional[List[Tuple[mx.array, mx.array]]] = None) -> mx.array:
-        # create position_ids on the fly for batch generation
-        _, seq_length = x.shape
-        past_key_values_length = 0
-        if cache is not None:
-            past_key_values_length = cache[0][0].shape[2]
-        position_ids = mx.arange(past_key_values_length, seq_length + past_key_values_length, dtype=mx.int64)
-        position_ids = position_ids[None, ...].reshape(-1, seq_length)
-
-        return position_ids
 
     def __call__(
         self,
-        x: mx.array,
-    ) -> mx.array:
-        mask = nn.MultiHeadAttention.create_additive_causal_mask(x.shape[1])
-        mask = mask.astype(self.model.embed_tokens.weight.dtype)
-
-        x = self.model.embed_tokens(x)
-        for layer in self.model.layers.layers:
-            x, _ = layer(x, mask)
-        x = self.model.norm(x)
-        return self.lm_head(x)
-
-    def generate(self, x: mx.array, temp=1.0) -> mx.array:
-        def sample(logits):
-            if temp == 0:
-                return mx.argmax(logits, axis=-1)
-            else:
-                return mx.random.categorical(logits * (1 / temp))
-
-        position_ids = self._create_position_ids(x)
-        cache: List[Tuple[mx.array, mx.array]] = []
-
-        # Make an additive causal mask. We will need that to process the prompt.
-        mask = nn.MultiHeadAttention.create_additive_causal_mask(x.shape[1])
-        mask = mask.astype(self.model.embed_tokens.weight.dtype)
-
-        # First we process the prompt x the same was as in __call__ but
-        # save the caches in cache
-        x = self.model.embed_tokens(x)
-        for layer in self.model.layers.layers:
-            x, c = layer(x, mask, position_ids)
-            # We store the per layer cache in a simple python list
-            cache.append(c)
-        x = self.model.norm(x)
-        # We only care about the last logits that generate the next token
-        y = self.lm_head(x[:, -1])
-        y = sample(y)
-
-        # y now has size [1]
-        # Since MLX is lazily evaluated nothing is computed yet.
-        # Calling y.item() would force the computation to happen at
-        # this point but we can also choose not to do that and let the
-        # user choose when to start the computation.
-        yield y
-
-        # Now we parsed the prompt and generated the first token we
-        # need to feed it back into the model and loop to generate the
-        # rest.
-        while True:
-            # Unsqueezing the last dimension to add a sequence length
-            # dimension of 1
-            x = y[:, None]
-
-            position_ids = self._create_position_ids(x, cache)
-
-            x = self.model.embed_tokens(x)
-            for i in range(len(cache)):
-                # We are overwriting the arrays in the cache list. When
-                # the computation will happen, MLX will be discarding the
-                # old cache the moment it is not needed anymore.
-                x, cache[i] = self.model.layers.layers[i](x, None, position_ids, cache=cache[i])
-            x = self.model.norm(x)
-            logits = self.lm_head(x[:, -1])
-            y = sample(logits)
-            if y == self.config.eos_token_id:
-                return y
-
-            yield y
-
-
-def load_model(
-    model_dir_path_str: str,
-) -> Tuple[PlamoForCausalLM, SentencePieceProcessor]:
-    model_path = Path(model_dir_path_str)
-
-    unsharded_weights_path = Path(model_path / "weights.npz")
-    if unsharded_weights_path.is_file():
-        print("[INFO] Loading model from {}.".format(unsharded_weights_path))
-        weights = mx.load(str(unsharded_weights_path))
-    else:
-        sharded_weights_glob = str(model_path / "weights.*.npz")
-        weight_files = glob.glob(sharded_weights_glob)
-        print("[INFO] Loading model from {}.".format(sharded_weights_glob))
-
-        if len(weight_files) == 0:
-            raise FileNotFoundError("No weights found in {}".format(model_path))
-
-        weights = {}
-        for wf in weight_files:
-            weights.update(mx.load(wf).items())
-
-    config = PlamoConfig.from_json_file(model_path / "config.json")
-    model = PlamoForCausalLM(config)
-    quantization = config.to_dict().pop("quantization", None)
-    if quantization is not None:
-        nn.QuantizedLinear.quantize_module(model, **quantization)
-    model.update(tree_unflatten(list(weights.items())))
-
-    tokenizer = SentencePieceProcessor(model_file=str(model_path / "tokenizer.model"))
-
-    return model, tokenizer
+        inputs: mx.array,
+        cache: Optional[List[Tuple[mx.array, mx.array]]] = None,
+    ) -> Tuple[mx.array, mx.array]:
+        out, cache = self.model(inputs, cache)
+        return self.lm_head(out), cache

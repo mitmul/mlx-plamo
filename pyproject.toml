@@ -11,18 +11,34 @@ packages = [{include = "mlx_plamo"}]
 python = "^3.11"
 sentencepiece = "^0.1.99"
 transformers = "4.32.0"
-mlx = "^0.0.9"
+mlx = {extras = ["dev"], version = "^0.0.10"}
 torch = "^2.1.2"
-
+mlx-lm = "^0.0.3"
+loguru = "^0.7.2"
 
 [tool.poetry.group.dev.dependencies]
 ipython = "^8.20.0"
 ipdb = "^0.13.13"
-isort = "^5.13.2"
+pysen = "^0.10.5"
 black = "^23.12.1"
+isort = "^5.13.2"
 flake8 = "^7.0.0"
-
+mypy = "^1.8.0"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pysen]
+version = "0.10"
+
+[tool.pysen.lint]
+enable_black = true
+enable_flake8 = true
+enable_isort = true
+enable_mypy = true
+mypy_preset = "strict"
+line_length = 120
+py_version = "py311"
+[[tool.pysen.lint.mypy_targets]]
+  paths = ["."]
