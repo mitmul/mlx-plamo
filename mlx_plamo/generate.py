@@ -4,7 +4,8 @@ import argparse
 import time
 
 import mlx.core as mx
-from mlx_lm.utils import generate_step, load
+from mlx_lm.utils import generate_step
+from mlx_plamo.utils import load
 
 DEFAULT_MODEL_PATH = "mlx_model"
 DEFAULT_PROMPT = "hello"
@@ -32,15 +33,42 @@ def setup_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--temp", type=float, default=DEFAULT_TEMP, help="Sampling temperature")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED, help="PRNG seed")
+    parser.add_argument("--instruct", action="store_true")
     return parser
 
 
-def main(args: argparse.Namespace) -> None:
+# From: https://huggingface.co/pfnet/plamo-13b-instruct
+def generate_prompt(messages: list) -> str:
+    sep = "\n\n### "
+    prompt = [
+        "以下はタスクを説明する指示で、文脈を説明した入力とペアになっています。",
+        "要求を適切に補完するよう応答を書いてください。",
+    ]
+    roles = {"instruction": "指示", "response": "応答", "input": "入力"}
+    for msg in messages:
+        prompt.append(sep + roles[msg["role"]] + ":\n" + msg["content"])
+    prompt.append(sep + roles["response"] + ":\n")
+    return "".join(prompt)
+
+
+def main(args):
     mx.random.seed(args.seed)
     model, tokenizer = load(args.model)
+
+    instruction_base = [
+        {
+            "role": "instruction",
+            "content": args.prompt,
+        },
+    ]
+    if args.instruct:
+        prompt = generate_prompt(instruction_base)
+    else:
+        prompt = args.prompt
+
     print("=" * 10)
-    print("Prompt:", args.prompt)
-    prompt = tokenizer.encode(args.prompt)
+    print("Prompt:", prompt)
+    prompt = tokenizer.encode(prompt)
     prompt = mx.array(prompt)
     tic = time.time()
     tokens = []

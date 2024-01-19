@@ -10,7 +10,7 @@ packages = [{include = "mlx_plamo"}]
 [tool.poetry.dependencies]
 python = "^3.11"
 sentencepiece = "^0.1.99"
-transformers = "4.32.0"
+transformers = "^4.32.0"
 mlx = {extras = ["dev"], version = "^0.0.10"}
 torch = "^2.1.2"
 mlx-lm = "^0.0.3"

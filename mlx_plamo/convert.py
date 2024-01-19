@@ -9,8 +9,8 @@ import mlx.core as mx
 import mlx.nn as nn
 import transformers
 from mlx.utils import tree_flatten
-
-from .utils import get_model_path, linear_class_predicate, load
+from mlx_lm.utils import get_model_path, linear_class_predicate
+from mlx_plamo.utils import load
 
 MAX_FILE_SIZE_GB = 15
 
@@ -58,8 +58,8 @@ def fetch_from_hub(
     for wf in weight_files:
         weights.update(mx.load(wf).items())
 
-    config = transformers.AutoConfig.from_pretrained(model_path)
-    tokenizer = transformers.AutoTokenizer.from_pretrained(model_path)
+    config = transformers.AutoConfig.from_pretrained(model_path, trust_remote_code=True)
+    tokenizer = transformers.AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
 
     return weights, config.to_dict(), tokenizer
 
