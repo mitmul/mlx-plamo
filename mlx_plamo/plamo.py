@@ -117,21 +117,21 @@ def _rotary_pos_emb(x: mx.array, cos: mx.array, sin: mx.array, position_ids: mx.
     return x_embed
 
 
-class RMSNorm(nn.Module):
+class RMSNorm(nn.Module):  # type: ignore
     def __init__(self, dims: int, eps: float = 1e-5):
         super().__init__()
         self.weight = mx.ones((dims,))
         self.variance_epsilon = eps
 
-    def _norm(self, x):
+    def _norm(self, x: mx.array) -> mx.array:
         return x * mx.rsqrt(x.square().mean(-1, keepdims=True) + self.variance_epsilon)
 
-    def __call__(self, x):
+    def __call__(self, x: mx.array) -> mx.array:
         output = self._norm(x.astype(mx.float32)).astype(x.dtype)
         return self.weight * output
 
 
-class Attention(nn.Module):
+class Attention(nn.Module):  # type: ignore
     def __init__(self, config: ModelArgs) -> None:
         super().__init__()
         self.config = config
@@ -200,7 +200,7 @@ class Attention(nn.Module):
         return self.o_proj(output), (key_states, value_states)
 
 
-class MLP(nn.Module):
+class MLP(nn.Module):  # type: ignore
     def __init__(self, config: ModelArgs) -> None:
         super().__init__()
         self.config = config
@@ -215,7 +215,7 @@ class MLP(nn.Module):
         return self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))  # type: ignore
 
 
-class PlamoDecoderLayer(nn.Module):
+class PlamoDecoderLayer(nn.Module):  # type: ignore
     def __init__(self, config: ModelArgs) -> None:
         super().__init__()
         self.config = config
@@ -254,13 +254,13 @@ class PlamoDecoderLayer(nn.Module):
         return hidden_states, cache  # type: ignore
 
 
-class PlamoDecoder(nn.Module):
+class PlamoDecoder(nn.Module):  # type: ignore
     def __init__(self, config: ModelArgs) -> None:
         super().__init__()
         self.layers = [PlamoDecoderLayer(config) for _ in range(config.num_hidden_layers)]
 
 
-class PlamoModel(nn.Module):
+class PlamoModel(nn.Module):  # type: ignore
     config_class = ModelArgs
     _no_split_modules: List[str]
     base_model_prefix = "model"
@@ -294,16 +294,13 @@ class PlamoModel(nn.Module):
             past_key_values_length = 0
             cache = [None for _ in range(len(self.layers.layers))]
         else:
-            if cache[0] is not None:
-                past_key_values_length = cache[0][0].shape[2]
+            past_key_values_length = cache[0][0].shape[2] if cache[0] is not None else 0
         position_ids = _create_position_ids(h.shape[1], past_key_values_length)
 
         for e, layer in enumerate(self.layers.layers):
             h, c = layer(h, mask, position_ids, cache[e])
             if cache is not None:
                 cache[e] = c
-            else:
-                cache.append(c)
 
         return self.norm(h), cache
 
@@ -316,7 +313,7 @@ def _create_position_ids(seq_length: int, past_key_values_length: int = 0) -> mx
     return position_ids
 
 
-class Model(nn.Module):
+class Model(nn.Module):  # type: ignore
     def __init__(self, config: PretrainedConfig) -> None:
         super().__init__()
         self.model = PlamoModel(config)
@@ -325,7 +322,7 @@ class Model(nn.Module):
     def __call__(
         self,
         inputs: mx.array,
-        cache: Optional[List[Tuple[mx.array, mx.array]]] = None,
+        cache: Optional[List[Union[Tuple[mx.array, mx.array], None]]] = None,
     ) -> Tuple[mx.array, mx.array]:
         out, cache = self.model(inputs, cache)
         return self.lm_head(out), cache

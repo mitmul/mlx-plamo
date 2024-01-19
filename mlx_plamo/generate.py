@@ -51,7 +51,7 @@ def generate_prompt(messages: list) -> str:
     return "".join(prompt)
 
 
-def main(args):
+def main(args: argparse.Namespace) -> None:
     mx.random.seed(args.seed)
     model, tokenizer = load(args.model)
 
@@ -66,14 +66,12 @@ def main(args):
     else:
         prompt = args.prompt
 
-    print("=" * 10)
-    print("Prompt:", prompt)
-    prompt = tokenizer.encode(prompt)
-    prompt = mx.array(prompt)
+    tokens = tokenizer.encode(prompt)
+    tokens_arr = mx.array(tokens)
     tic = time.time()
     tokens = []
     skip = 0
-    for token, n in zip(generate_step(prompt, model, args.temp), range(args.max_tokens)):
+    for token, n in zip(generate_step(tokens_arr, model, args.temp), range(args.max_tokens)):
         if token == tokenizer.eos_token_id:
             break
         if n == 0:
@@ -89,7 +87,7 @@ def main(args):
     if len(tokens) == 0:
         print("No tokens generated for this prompt")
         return
-    prompt_tps = prompt.size / prompt_time
+    prompt_tps = tokens_arr.size / prompt_time
     gen_tps = (len(tokens) - 1) / gen_time
     print(f"Prompt: {prompt_tps:.3f} tokens-per-sec")
     print(f"Generation: {gen_tps:.3f} tokens-per-sec")
