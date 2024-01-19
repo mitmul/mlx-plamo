@@ -28,6 +28,7 @@ def generate(
 ) -> str:
     # input("Press enter to start generation")
     print("------")
+    print(f"Prompt:\n{prompt}")
     x = mx.array([tokenizer.encode(prompt)], dtype=mx.int64)
     skip = 0
     prompt_processing = None

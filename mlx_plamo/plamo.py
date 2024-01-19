@@ -434,7 +434,6 @@ def load_model(
     if quantization is not None:
         nn.QuantizedLinear.quantize_module(model, **quantization)
     model.update(tree_unflatten(list(weights.items())))
-    model.update(tree_unflatten(list(weights.items())))
 
     tokenizer = SentencePieceProcessor(model_file=str(model_path / "tokenizer.model"))
 
