@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 import time
 from pathlib import Path
 from typing import Any, Callable, Generator
@@ -272,7 +273,9 @@ def train(
 
         # Save adapter weights if needed
         if (it + 1) % args.save_every == 0:
-            mx.savez(args.adapter_file, **dict(tree_flatten(model.trainable_parameters())))
+            out_base, out_ext = os.path.splitext(args.adapter_file)
+            out_fn = f"{out_base}_{it + 1}{out_ext}"
+            mx.savez(out_fn, **dict(tree_flatten(model.trainable_parameters())))
             logger.info(f"Iter {it + 1}: Saved adapter weights to {args.adapter_file}.")
 
 
