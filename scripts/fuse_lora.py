@@ -70,7 +70,7 @@ if __name__ == "__main__":
 
     # Freeze all layers other than LORA linears
     model.freeze()
-    for layer in model.model.layers[-lora_layers:]:
+    for layer in model.model.layers.layers[-lora_layers:]:
         layer.self_attn.q_proj = LoRALinear.from_linear(layer.self_attn.q_proj)
         layer.self_attn.v_proj = LoRALinear.from_linear(layer.self_attn.v_proj)
 
