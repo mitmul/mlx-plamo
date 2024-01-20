@@ -88,11 +88,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Load path to resume training with the given adapter weights.",
     )
+    parser.add_argument("--output-dir", type=str, help="Output directory for results.")
     parser.add_argument(
-        "--adapter-file",
+        "--last-adapter-file",
         type=str,
-        default="adapters.npz",
-        help="Save/load path for the trained adapter weights.",
+        default="final.npz",
+        help="Load path for the trained adapter weights.",
     )
     parser.add_argument(
         "--save-every",
@@ -273,10 +274,9 @@ def train(
 
         # Save adapter weights if needed
         if (it + 1) % args.save_every == 0:
-            out_base, out_ext = os.path.splitext(args.adapter_file)
-            out_fn = f"{out_base}_{it + 1}{out_ext}"
+            out_fn = os.path.join(args.output_dir, f"adapters_{it + 1}.npz")
             mx.savez(out_fn, **dict(tree_flatten(model.trainable_parameters())))
-            logger.info(f"Iter {it + 1}: Saved adapter weights to {args.adapter_file}.")
+            logger.info(f"Iter {it + 1}: Saved adapter weights to {out_fn}.")
 
 
 def generate(model: Model, prompt: str, tokenizer: PreTrainedTokenizer, args: argparse.Namespace) -> None:
@@ -307,6 +307,7 @@ def generate(model: Model, prompt: str, tokenizer: PreTrainedTokenizer, args: ar
 if __name__ == "__main__":
     parser = build_parser()
     args = parser.parse_args()
+    os.makedirs(args.output_dir, exist_ok=True)
 
     np.random.seed(args.seed)
 
@@ -340,14 +341,16 @@ if __name__ == "__main__":
         train(model, train_set, valid_set, opt, loss, tokenizer, args)
 
         # Save adapter weights
-        mx.savez(args.adapter_file, **dict(tree_flatten(model.trainable_parameters())))
+        out_fn = os.path.join(args.output_dir, "final.npz")
+        mx.savez(out_fn, **dict(tree_flatten(model.trainable_parameters())))
 
     # Load the LoRA adapter weights which we assume should exist by this point
-    if not Path(args.adapter_file).is_file():
+    last_adapter_file = os.path.join(args.output_dir, args.last_adapter_file)
+    if not Path(last_adapter_file).is_file():
         raise ValueError(
-            f"Adapter file {args.adapter_file} missing. " "Use --train to learn and save the adapters.npz."
+            f"Adapter file {last_adapter_file} missing. " "Use --train to learn and save the adapters.npz."
         )
-    model.load_weights(args.adapter_file, strict=False)
+    model.load_weights(last_adapter_file, strict=False)
 
     if args.test:
         logger.info("Testing")
