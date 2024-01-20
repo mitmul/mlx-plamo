@@ -4,6 +4,7 @@ import argparse
 import time
 
 import mlx.core as mx
+from loguru import logger
 from mlx_lm.utils import generate_step
 from mlx_plamo.utils import load
 
@@ -51,7 +52,7 @@ def generate_prompt(messages: list) -> str:
     return "".join(prompt)
 
 
-def main(args: argparse.Namespace) -> None:
+def generate(args: argparse.Namespace) -> None:
     mx.random.seed(args.seed)
     model, tokenizer = load(args.model)
 
@@ -83,17 +84,17 @@ def main(args: argparse.Namespace) -> None:
         skip = len(s)
     print(tokenizer.decode(tokens)[skip:], flush=True)
     gen_time = time.time() - tic
-    print("=" * 10)
+    logger.info("=" * 10)
     if len(tokens) == 0:
-        print("No tokens generated for this prompt")
+        logger.info("No tokens generated for this prompt")
         return
     prompt_tps = tokens_arr.size / prompt_time
     gen_tps = (len(tokens) - 1) / gen_time
-    print(f"Prompt: {prompt_tps:.3f} tokens-per-sec")
-    print(f"Generation: {gen_tps:.3f} tokens-per-sec")
+    logger.info(f"Prompt: {prompt_tps:.3f} tokens-per-sec")
+    logger.info(f"Generation: {gen_tps:.3f} tokens-per-sec")
 
 
 if __name__ == "__main__":
     parser = setup_arg_parser()
     args = parser.parse_args()
-    main(args)
+    generate(args)
