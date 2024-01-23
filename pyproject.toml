@@ -17,6 +17,7 @@ mlx-lm = "^0.0.3"
 loguru = "^0.7.2"
 datasets = "^2.16.1"
 beautifulsoup4 = "^4.12.3"
+tensorboard = "^2.15.1"
 
 [tool.poetry.group.dev.dependencies]
 ipython = "^8.20.0"

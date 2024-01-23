@@ -16,6 +16,7 @@ from mlx.utils import tree_flatten
 from mlx_plamo.generate import generate_step
 from mlx_plamo.models.plamo import LoRALinear, Model
 from mlx_plamo.utils import load as load_model
+from torch.utils.tensorboard import SummaryWriter
 from transformers import PreTrainedTokenizer
 
 
@@ -31,7 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--max-tokens",
         "-m",
         type=int,
-        default=100,
+        default=256,
         help="The maximum number of tokens to generate",
     )
     parser.add_argument("--temp", type=float, default=0.8, help="The sampling temperature")
@@ -61,8 +62,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=16,
         help="Number of layers to fine-tune",
     )
-    parser.add_argument("--batch-size", type=int, default=4, help="Minibatch size.")
-    parser.add_argument("--iters", type=int, default=1000, help="Iterations to train for.")
+    parser.add_argument("--batch-size", type=int, default=16, help="Minibatch size.")
+    parser.add_argument("--iters", type=int, default=2000, help="Iterations to train for.")
     parser.add_argument(
         "--val-batches",
         type=int,
@@ -229,6 +230,7 @@ def train(
     loss: Callable,
     tokenizer: PreTrainedTokenizer,
     args: argparse.Namespace,
+    writer: SummaryWriter,
 ) -> None:
     # Create value and grad function for loss
     loss_value_and_grad = nn.value_and_grad(model, loss)
@@ -252,7 +254,7 @@ def train(
 
         # Report training loss if needed
         if (it + 1) % args.steps_per_report == 0:
-            train_loss = np.mean(losses)
+            train_loss: float = np.mean(losses)
 
             stop = time.perf_counter()
             logger.info(
@@ -260,6 +262,7 @@ def train(
                 f"It/sec {args.steps_per_report / (stop - start):.3f}, "
                 f"Tokens/sec {float(n_tokens) / (stop - start):.3f}"
             )
+            writer.add_scalar("loss/train", train_loss, it)  # type: ignore
             losses = []
             n_tokens = 0
             start = time.perf_counter()
@@ -308,6 +311,8 @@ if __name__ == "__main__":
     parser = build_parser()
     args = parser.parse_args()
     os.makedirs(args.output_dir, exist_ok=True)
+    logger.info(f"args: {json.dumps(vars(args), indent=4)}")
+    writer = SummaryWriter(log_dir=args.output_dir)  # type: ignore
 
     np.random.seed(args.seed)
 
@@ -338,7 +343,7 @@ if __name__ == "__main__":
         opt = optim.Adam(learning_rate=args.learning_rate)
 
         # Train model
-        train(model, train_set, valid_set, opt, loss, tokenizer, args)
+        train(model, train_set, valid_set, opt, loss, tokenizer, args, writer)
 
         # Save adapter weights
         out_fn = os.path.join(args.output_dir, "final.npz")
