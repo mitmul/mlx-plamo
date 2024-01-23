@@ -49,3 +49,17 @@ You will see the output like this:
 ```
 
 The elapsed time shown above is measured on M1 Max MacBook Pro (with 10 CPUs, 32 GPUs, and 64GB memory model).
+
+### Training
+
+#### Training with LoRA
+
+```bash
+poetry run python scripts/train.py \
+--model data/plamo-13b \
+--data data \
+--train \
+--batch-size 16 \
+--steps-per-report 1 \
+--output-dir data/$(date '+%Y-%m-%d_%H-%M-%S')
+```
