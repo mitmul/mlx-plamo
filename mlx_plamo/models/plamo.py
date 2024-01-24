@@ -120,13 +120,13 @@ def _rotary_pos_emb(x: mx.array, cos: mx.array, sin: mx.array, position_ids: mx.
 
 class LoRALinear(nn.Module):  # type: ignore
     @staticmethod
-    def from_linear(linear: nn.Linear, rank: int = 64) -> Any:
+    def from_linear(linear: nn.Linear, lora_rank: int, bias: bool, scale: float) -> Any:
         # TODO remove when input_dims and output_dims are attributes
         # on linear and quantized linear
         output_dims, input_dims = linear.weight.shape
         if isinstance(linear, nn.QuantizedLinear):
             input_dims *= 32 // linear.bits
-        lora_lin = LoRALinear(input_dims, output_dims, rank)
+        lora_lin = LoRALinear(input_dims, output_dims, lora_rank)
         lora_lin.linear = linear
         return lora_lin
 

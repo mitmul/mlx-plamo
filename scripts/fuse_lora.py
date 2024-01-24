@@ -56,6 +56,24 @@ if __name__ == "__main__":
         type=str,
         default=None,
     )
+    parser.add_argument(
+        "--lora-rank",
+        type=int,
+        default=64,
+        help="Number of layers to fine-tune",
+    )
+    parser.add_argument(
+        "--lora-bias",
+        action="store_true",
+        default=False,
+        help="Use bias for LoRA linear layers",
+    )
+    parser.add_argument(
+        "--lora-scale",
+        type=int,
+        default=128,
+        help="Number of layers to fine-tune",
+    )
 
     print("Loading pretrained model")
     args = parser.parse_args()
@@ -71,8 +89,12 @@ if __name__ == "__main__":
     # Freeze all layers other than LORA linears
     model.freeze()
     for layer in model.model.layers.layers[-lora_layers:]:
-        layer.self_attn.q_proj = LoRALinear.from_linear(layer.self_attn.q_proj)
-        layer.self_attn.v_proj = LoRALinear.from_linear(layer.self_attn.v_proj)
+        layer.self_attn.q_proj = LoRALinear.from_linear(
+            layer.self_attn.q_proj, args.lora_rank, args.lora_bias, args.lora_scale
+        )
+        layer.self_attn.v_proj = LoRALinear.from_linear(
+            layer.self_attn.v_proj, args.lora_rank, args.lora_bias, args.lora_scale
+        )
 
     model.update(tree_unflatten(adapters))
     fused_linears = [(n, m.to_linear()) for n, m in model.named_modules() if isinstance(m, LoRALinear)]

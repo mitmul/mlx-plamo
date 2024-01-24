@@ -62,6 +62,24 @@ def build_parser() -> argparse.ArgumentParser:
         default=16,
         help="Number of layers to fine-tune",
     )
+    parser.add_argument(
+        "--lora-rank",
+        type=int,
+        default=64,
+        help="Number of layers to fine-tune",
+    )
+    parser.add_argument(
+        "--lora-bias",
+        action="store_true",
+        default=False,
+        help="Use bias for LoRA linear layers",
+    )
+    parser.add_argument(
+        "--lora-scale",
+        type=int,
+        default=128,
+        help="Number of layers to fine-tune",
+    )
     parser.add_argument("--batch-size", type=int, default=16, help="Minibatch size.")
     parser.add_argument("--iters", type=int, default=2000, help="Iterations to train for.")
     parser.add_argument(
@@ -90,12 +108,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Load path to resume training with the given adapter weights.",
     )
     parser.add_argument("--output-dir", type=str, help="Output directory for results.")
-    parser.add_argument(
-        "--last-adapter-file",
-        type=str,
-        default="final.npz",
-        help="Load path for the trained adapter weights.",
-    )
     parser.add_argument(
         "--save-every",
         type=int,
@@ -311,6 +323,9 @@ if __name__ == "__main__":
     parser = build_parser()
     args = parser.parse_args()
     os.makedirs(args.output_dir, exist_ok=True)
+    with open(os.path.join(args.output_dir, "config.json"), "w") as f:
+        json.dump(vars(args), f, indent=4)
+    logger.add(os.path.join(args.output_dir, "log.txt"))
     logger.info(f"args: {json.dumps(vars(args), indent=4)}")
     writer = SummaryWriter(log_dir=args.output_dir)  # type: ignore
 
@@ -322,8 +337,27 @@ if __name__ == "__main__":
     # Freeze all layers other than LORA linears
     model.freeze()
     for layer in model.model.layers.layers[len(model.model.layers.layers) - args.lora_layers :]:
-        layer.self_attn.q_proj = LoRALinear.from_linear(layer.self_attn.q_proj)
-        layer.self_attn.v_proj = LoRALinear.from_linear(layer.self_attn.v_proj)
+        layer.self_attn.q_proj = LoRALinear.from_linear(
+            layer.self_attn.q_proj, args.lora_rank, args.lora_bias, args.lora_scale
+        )
+        layer.self_attn.k_proj = LoRALinear.from_linear(
+            layer.self_attn.k_proj, args.lora_rank, args.lora_bias, args.lora_scale
+        )
+        layer.self_attn.v_proj = LoRALinear.from_linear(
+            layer.self_attn.v_proj, args.lora_rank, args.lora_bias, args.lora_scale
+        )
+        layer.self_attn.o_proj = LoRALinear.from_linear(
+            layer.self_attn.o_proj, args.lora_rank, args.lora_bias, args.lora_scale
+        )
+        layer.mlp.gate_proj = LoRALinear.from_linear(
+            layer.mlp.gate_proj, args.lora_rank, args.lora_bias, args.lora_scale
+        )
+        layer.mlp.up_proj = LoRALinear.from_linear(
+            layer.mlp.up_proj, args.lora_rank, args.lora_bias, args.lora_scale
+        )
+        layer.mlp.down_proj = LoRALinear.from_linear(
+            layer.mlp.down_proj, args.lora_rank, args.lora_bias, args.lora_scale
+        )
 
     p = sum(v.size for _, v in tree_flatten(model.parameters())) / 10**6
     logger.info(f"Total parameters {p:.3f}M")
