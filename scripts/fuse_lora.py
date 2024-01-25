@@ -89,11 +89,33 @@ if __name__ == "__main__":
     # Freeze all layers other than LORA linears
     model.freeze()
     for layer in model.model.layers.layers[-lora_layers:]:
+        # q_proj
         layer.self_attn.q_proj = LoRALinear.from_linear(
             layer.self_attn.q_proj, args.lora_rank, args.lora_bias, args.lora_scale
         )
+        # k_proj
+        layer.self_attn.k_proj = LoRALinear.from_linear(
+            layer.self_attn.k_proj, args.lora_rank, args.lora_bias, args.lora_scale
+        )
+        # v_proj
         layer.self_attn.v_proj = LoRALinear.from_linear(
             layer.self_attn.v_proj, args.lora_rank, args.lora_bias, args.lora_scale
+        )
+        # o_proj
+        layer.self_attn.o_proj = LoRALinear.from_linear(
+            layer.self_attn.o_proj, args.lora_rank, args.lora_bias, args.lora_scale
+        )
+        # gate_proj
+        layer.mlp.gate_proj = LoRALinear.from_linear(
+            layer.mlp.gate_proj, args.lora_rank, args.lora_bias, args.lora_scale
+        )
+        # up_proj
+        layer.mlp.up_proj = LoRALinear.from_linear(
+            layer.mlp.up_proj, args.lora_rank, args.lora_bias, args.lora_scale
+        )
+        # down_proj
+        layer.mlp.down_proj = LoRALinear.from_linear(
+            layer.mlp.down_proj, args.lora_rank, args.lora_bias, args.lora_scale
         )
 
     model.update(tree_unflatten(adapters))
