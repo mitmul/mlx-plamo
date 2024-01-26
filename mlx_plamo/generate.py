@@ -58,7 +58,7 @@ def generate(args: argparse.Namespace) -> None:
 
     instruction_base = [
         {
-            "role": "instruction",
+            "role": "input",
             "content": args.prompt,
         },
     ]
